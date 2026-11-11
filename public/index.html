@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chordloop: chord progression player</title>
+<style>
+:root{--bg:#17131f;--surf:#221c2e;--surf2:#2c2540;--line:#3d3454;--text:#f1ecf8;--mute:#a99dbf;--acc:#5ee0c6;--now:#ffb454;--ink:#17131f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 ui-rounded,"Avenir Next","Segoe UI",system-ui,sans-serif}
+main{max-width:980px;margin:0 auto;padding:28px 18px 60px}
+h1{font-size:30px;margin:0;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:2px 0 22px}
+h2{font-size:15px;font-weight:600;color:var(--mute);margin:0 0 10px}
+section{margin-bottom:26px}
+button,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.bar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:16px}
+.play{background:var(--acc);color:var(--ink);border:0;border-radius:12px;padding:10px 22px;font-weight:700;min-width:112px}
+.play.on{background:var(--now)}
+.tog{background:none;border:1px solid var(--line);border-radius:10px;padding:8px 14px}
+.tog[aria-pressed=true]{background:var(--surf2);border-color:var(--acc);color:var(--acc)}
+.tempo{display:flex;align-items:center;gap:10px;flex:1;min-width:230px}
+.tempo input{flex:1;accent-color:var(--acc)}
+.bpm{font-weight:700;font-variant-numeric:tabular-nums;min-width:74px;text-align:right}
+.step{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:none}
+.prog{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:12px}
+.card{background:var(--surf);border:2px solid var(--line);border-radius:16px;padding:12px;transition:background .12s,border-color .12s}
+.card.on{background:#3a2a1c;border-color:var(--now)}
+.name{display:block;width:100%;text-align:left;background:none;border:0;padding:0;font-size:32px;font-weight:700;letter-spacing:-.02em}
+.card.on .name{color:var(--now)}
+.rn{color:var(--mute);font-size:14px}
+.notes{color:var(--mute);font-size:13px;min-height:20px}
+.dots{display:flex;gap:5px;margin:8px 0}
+.dots i{width:100%;height:5px;border-radius:3px;background:var(--line)}
+.dots i.on{background:var(--now)}
+.row{display:flex;gap:6px;align-items:center}
+.row select{flex:1;min-width:0;background:var(--surf2);border:1px solid var(--line);border-radius:8px;padding:5px 6px;font-size:14px}
+.mini{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:none}
+.empty{color:var(--mute);padding:20px;border:1px dashed var(--line);border-radius:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--surf);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:15px}
+.chip small{color:var(--mute);margin-left:6px}
+.chip[aria-pressed=true]{border-color:var(--acc);background:var(--surf2);color:var(--acc)}
+.chip.add:hover{border-color:var(--acc)}
+.keys{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;max-width:420px}
+.keys .chip{border-radius:10px;text-align:center;padding:7px 0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}
+.seg{display:inline-flex;margin-top:10px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{background:none;border:0;padding:7px 18px}
+.seg button[aria-pressed=true]{background:var(--acc);color:var(--ink);font-weight:600}
+.heard{font-size:34px;font-weight:700;margin:14px 0 10px;min-height:44px;letter-spacing:-.02em}
+label.tog{display:inline-block;cursor:pointer}
+#listen .bar{margin-bottom:10px}
+#listen .chip{cursor:default}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Chordloop</h1>
+  <p class="sub">Pick a key, build a progression, and loop it while you write.</p>
+
+  <div class="bar">
+    <button class="play" id="play">▶ Play</button>
+    <button class="tog" id="loop" aria-pressed="true">Loop</button>
+    <button class="tog" id="sev" aria-pressed="false">7th chords</button>
+    <div class="tempo">
+      <button class="step" id="slower" aria-label="Slower">−</button>
+      <input type="range" id="bpm" min="50" max="200" value="96" aria-label="Tempo">
+      <button class="step" id="faster" aria-label="Faster">+</button>
+      <span class="bpm" id="bpmv">96 BPM</span>
+    </div>
+  </div>
+
+  <section><h2>Your progression</h2><div class="prog" id="prog"></div></section>
+  <section><h2>Add a chord from this key</h2><div class="chips" id="pal"></div></section>
+
+  <div class="cols">
+    <section><h2>Key</h2><div class="keys" id="keys"></div>
+      <div class="seg" id="mode"><button data-m="major">Major</button><button data-m="minor">Minor</button></div>
+    </section>
+    <section><h2>Progression presets</h2><div class="chips" id="pre"></div></section>
+  </div>
+  <section><h2>Playing pattern</h2><div class="chips" id="pat"></div></section>
+  <section id="listen"><h2>Listen to a song and find its chords</h2>
+    <div class="bar">
+      <label class="tog" for="file">Upload audio</label><input type="file" id="file" accept="audio/*" hidden>
+      <button class="tog" id="mic" aria-pressed="false">Use microphone</button>
+      <audio id="au" controls style="flex:1;min-width:220px"></audio>
+    </div>
+    <div class="heard" id="heard" aria-live="polite">Waiting for sound</div>
+    <div class="chips" id="seq"></div>
+    <div class="bar" style="margin-top:12px"><button class="tog" id="load">Load detected chords into player</button><span class="rn" id="keyinfo">Chords appear here as the song plays. Simple songs work best.</span></div>
+  </section>
+</main>
+
+<script>
+const SHARP=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const FLAT=['C','D♭','D','E♭','E','F','G♭','G','A♭','A','B♭','B'];
+const SC={major:[0,2,4,5,7,9,11],minor:[0,2,3,5,7,8,10]};
+const RN=['I','II','III','IV','V','VI','VII'];
+const PRESETS={
+  major:[['Pop',[0,4,5,3]],['Emotional',[5,3,0,4]],['Doo-wop',[0,5,3,4]],['Jazz turnaround',[1,4,0,5]],['Classic rock',[0,3,4,3]],['Canon',[0,4,5,2,3,0,3,4]]],
+  minor:[['Epic',[0,5,2,6]],['Andalusian',[0,6,5,6]],['Dark pop',[0,3,6,2]],['Ballad',[0,3,4,0]],['Cinematic',[0,5,3,4]],['Rising',[0,2,6,5]]]
+};
+const PATS={
+  block:{n:'Block chords',s:'B-------',bass:1},
+  down:{n:'Strum ↓ quarters',s:'D-D-D-D-',bass:1},
+  folk:{n:'Folk strum',s:'D-DU-UDU',bass:1},
+  arp:{n:'Arpeggio up',s:'01230123'},
+  arpud:{n:'Arpeggio up-down',s:'01232121'},
+  pick:{n:'Fingerpicking',s:'02123212'}
+};
+const s={root:0,mode:'major',prog:[0,4,5,3],pat:'folk',bpm:96,sev:false,loop:true,playing:false,cur:-1,beat:0};
+const $=id=>document.getElementById(id);
+const nm=pc=>(([1,3,5,8,10].includes(s.root))?FLAT:SHARP)[pc%12];
+const sn=d=>SC[s.mode][d%7]+12*Math.floor(d/7);
+
+function chord(d){
+  const r=sn(d),t=[0,sn(d+2)-r,sn(d+4)-r,sn(d+6)-r],pc=(s.root+r)%12;
+  let q=t[1]==4&&t[2]==7?'':t[1]==3&&t[2]==7?'m':t[1]==3&&t[2]==6?'dim':'aug';
+  let suf=q;
+  if(s.sev){suf=q==''?(t[3]==11?'maj7':'7'):q=='m'?'m7':q=='dim'?(t[3]==9?'dim7':'m7♭5'):'aug7'}
+  const minor=q=='m'||q=='dim';
+  const roman=minor?RN[d].toLowerCase():RN[d];
+  const notes=t.slice(0,s.sev?4:3).map(x=>nm(pc+x));
+  return{t,pc,name:nm(pc)+suf,roman:roman+(q=='dim'?'°':q=='aug'?'+':''),notes};
+}
+function voicing(d){
+  const c=chord(d);let m0=48+c.pc;if(m0>=55)m0-=12;
+  return{bass:m0-12,n:[m0,m0+c.t[1],m0+c.t[2],s.sev?m0+c.t[3]:m0+12]};
+}
+
+/* ---------- audio ---------- */
+let ctx,master,filt;
+function audio(){
+  if(!ctx){
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    master=ctx.createGain();master.gain.value=.55;
+    const comp=ctx.createDynamicsCompressor();
+    filt=ctx.createBiquadFilter();filt.type='lowpass';filt.frequency.value=2400;
+    filt.connect(master);master.connect(comp);comp.connect(ctx.destination);
+  }
+  if(ctx.state=='suspended')ctx.resume();
+}
+function tone(m,t,dur,vel){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.type='triangle';o.frequency.value=440*Math.pow(2,(m-69)/12);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vel,t+.012);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g);g.connect(filt);o.start(t);o.stop(t+dur+.05);
+}
+function hit(ci,step,t){
+  const p=PATS[s.pat],e=p.s[step];if(e=='-')return;
+  const v=voicing(s.prog[ci]),eighth=60/s.bpm/2;
+  let j=step+1;while(j<8&&p.s[j]=='-')j++;
+  const hold=(j-step)*eighth+.3;
+  if(step==0&&p.bass)tone(v.bass,t,8*eighth,.32);
+  if(e=='B'){v.n.forEach(m=>tone(m,t,hold,.2))}
+  else if(e=='D'||e=='U'){
+    const order=e=='D'?[0,1,2,3]:[3,2,1,0];
+    order.forEach((k,i)=>tone(v.n[k],t+i*.018,hold,e=='D'?.22:.15));
+  }else tone(v.n[+e],t,eighth*4,.36);
+}
+
+/* ---------- scheduler ---------- */
+let timer,nextT,step,ci,rid=0;
+function tick(){
+  while(nextT<ctx.currentTime+.12){
+    if(!s.prog.length){stop();return}
+    if(ci>=s.prog.length){
+      if(s.loop)ci=0;
+      else{clearInterval(timer);const r=rid;setTimeout(()=>{if(r==rid)stop()},Math.max(0,(nextT-ctx.currentTime)*1000));return}
+    }
+    if(step%2==0){
+      const c=ci,b=step/2,r=rid;
+      setTimeout(()=>{if(r==rid){s.cur=c;s.beat=b;paint()}},Math.max(0,(nextT-ctx.currentTime)*1000));
+    }
+    hit(ci,step,nextT);
+    nextT+=60/s.bpm/2;step++;
+    if(step==8){step=0;ci++}
+  }
+}
+function start(){
+  if(!s.prog.length)return;
+  audio();rid++;s.playing=true;step=0;ci=0;nextT=ctx.currentTime+.08;
+  timer=setInterval(tick,25);tick();ui();
+}
+function stop(){clearInterval(timer);rid++;s.playing=false;s.cur=-1;ui();paint()}
+function audition(d){
+  audio();const v=voicing(d),t=ctx.currentTime+.02;
+  tone(v.bass,t,1.4,.3);v.n.forEach((m,i)=>tone(m,t+i*.02,1.4,.22));
+}
+
+/* ---------- UI ---------- */
+function ui(){
+  $('play').textContent=s.playing?'■ Stop':'▶ Play';
+  $('play').classList.toggle('on',s.playing);
+  $('bpmv').textContent=s.bpm+' BPM';$('bpm').value=s.bpm;
+  $('loop').setAttribute('aria-pressed',s.loop);$('sev').setAttribute('aria-pressed',s.sev);
+}
+function paint(){
+  document.querySelectorAll('.card').forEach((c,i)=>{
+    c.classList.toggle('on',i==s.cur);
+    c.querySelectorAll('.dots i').forEach((d,b)=>d.classList.toggle('on',i==s.cur&&b<=s.beat));
+  });
+}
+function render(){
+  const keys=nm=>0;
+  $('keys').innerHTML=[0,1,2,3,4,5,6,7,8,9,10,11].map(k=>
+    `<button class="chip" data-k="${k}" aria-pressed="${k==s.root}">${(([1,3,5,8,10].includes(k))?FLAT:SHARP)[k]}</button>`).join('');
+  document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m==s.mode));
+  $('pre').innerHTML=PRESETS[s.mode].map((p,i)=>
+    `<button class="chip" data-p="${i}">${p[0]}<small>${p[1].map(d=>chord(d).roman).join(' ')}</small></button>`).join('');
+  $('pat').innerHTML=Object.keys(PATS).map(k=>
+    `<button class="chip" data-t="${k}" aria-pressed="${k==s.pat}">${PATS[k].n}</button>`).join('');
+  $('pal').innerHTML=[0,1,2,3,4,5,6].map(d=>{const c=chord(d);
+    return `<button class="chip add" data-a="${d}">+ ${c.name}<small>${c.roman}</small></button>`}).join('');
+  const opts=i=>[0,1,2,3,4,5,6].map(d=>{const c=chord(d);
+    return `<option value="${d}"${d==s.prog[i]?' selected':''}>${c.name} (${c.roman})</option>`}).join('');
+  $('prog').innerHTML=s.prog.length?s.prog.map((d,i)=>{const c=chord(d);
+    return `<div class="card"><button class="name" data-aud="${d}" title="Hear this chord">${c.name}</button>
+      <div class="rn">${c.roman}</div><div class="notes">${c.notes.join(' ')}</div>
+      <div class="dots"><i></i><i></i><i></i><i></i></div>
+      <div class="row"><select data-i="${i}" aria-label="Change chord ${i+1}">${opts(i)}</select>
+      <button class="mini" data-l="${i}" aria-label="Move left">‹</button>
+      <button class="mini" data-r="${i}" aria-label="Move right">›</button>
+      <button class="mini" data-x="${i}" aria-label="Remove chord">×</button></div></div>`}).join('')
+    :'<div class="empty">No chords yet. Add one from the key below or pick a preset.</div>';
+  ui();paint();
+}
+function move(i,j){if(j<0||j>=s.prog.length)return;[s.prog[i],s.prog[j]]=[s.prog[j],s.prog[i]]}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;const d=b.dataset;
+  if(d.k!==undefined)s.root=+d.k;
+  else if(d.m)s.mode=d.m;
+  else if(d.p!==undefined)s.prog=PRESETS[s.mode][+d.p][1].slice();
+  else if(d.t)s.pat=d.t;
+  else if(d.a!==undefined){if(s.prog.length<16)s.prog.push(+d.a)}
+  else if(d.x!==undefined)s.prog.splice(+d.x,1);
+  else if(d.l!==undefined)move(+d.l,+d.l-1);
+  else if(d.r!==undefined)move(+d.r,+d.r+1);
+  else if(d.aud!==undefined){audition(+d.aud);return}
+  else return;
+  if(d.k!==undefined||d.a!==undefined){const v=d.a!==undefined?+d.a:null;if(v!==null)audition(v)}
+  render();
+});
+document.addEventListener('change',e=>{
+  if(e.target.dataset.i!==undefined){s.prog[+e.target.dataset.i]=+e.target.value;render();audition(+e.target.value)}
+});
+$('play').onclick=()=>s.playing?stop():start();
+$('loop').onclick=()=>{s.loop=!s.loop;ui()};
+$('sev').onclick=()=>{s.sev=!s.sev;render()};
+const setBpm=v=>{s.bpm=Math.max(50,Math.min(200,v));ui()};
+$('bpm').oninput=e=>setBpm(+e.target.value);
+$('slower').onclick=()=>setBpm(s.bpm-4);
+$('faster').onclick=()=>setBpm(s.bpm+4);
+document.addEventListener('keydown',e=>{
+  if(e.code=='Space'&&e.target==document.body){e.preventDefault();s.playing?stop():start()}
+});
+/* ---------- listen to a song ---------- */
+const PROF={major:[6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88],minor:[6.33,2.68,3.52,5.38,2.6,3.53,2.54,4.75,3.98,2.69,3.34,3.17]};
+const au=$('au');
+let an,fb,pcMap,fsrc,msrc,mstream,ltimer,lastKey='',cand='',candN=0,heard=[];
+const ema=new Array(12).fill(0),all=new Array(12).fill(0);
+function setupAn(){
+  audio();if(an)return;
+  an=ctx.createAnalyser();an.fftSize=16384;an.smoothingTimeConstant=.4;an.minDecibels=-100;
+  fb=new Float32Array(an.frequencyBinCount);pcMap=new Int8Array(fb.length).fill(-1);
+  for(let i=1;i<fb.length;i++){const f=i*ctx.sampleRate/an.fftSize;
+    if(f>=100&&f<=1600)pcMap[i]=((Math.round(69+12*Math.log2(f/440))%12)+12)%12}
+}
+function guess(c){
+  const n=Math.hypot(...c);if(n<.02)return null;
+  let best=null,bs=0;
+  for(let r=0;r<12;r++)for(const m of [0,1]){
+    const sc=(c[r]+c[(r+(m?3:4))%12]+c[(r+7)%12])/(n*Math.sqrt(3));
+    if(sc>bs){bs=sc;best={pc:r,minor:!!m}}
+  }
+  return bs>.6?best:null;
+}
+const cname=g=>SHARP[g.pc]+(g.minor?'m':'');
+function keyEst(){
+  let best=null,bs=-9;
+  const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+  for(let r=0;r<12;r++)for(const m of ['major','minor']){
+    const x=all.map((_,i)=>all[(i+r)%12]),p=PROF[m],mx=avg(x),mp=avg(p);
+    let a=0,b=0,d=0;
+    for(let i=0;i<12;i++){a+=(x[i]-mx)*(p[i]-mp);b+=(x[i]-mx)**2;d+=(p[i]-mp)**2}
+    const cr=a/Math.sqrt(b*d||1);if(cr>bs){bs=cr;best={root:r,mode:m}}
+  }
+  return best;
+}
+function showSeq(){$('seq').innerHTML=heard.slice(-24).map(g=>`<span class="chip">${cname(g)}</span>`).join('')}
+function listenTick(){
+  an.getFloatFrequencyData(fb);
+  const c=new Array(12).fill(0);
+  for(let i=1;i<fb.length;i++){const p=pcMap[i];if(p>=0)c[p]+=Math.pow(10,fb[i]/20)}
+  for(let k=0;k<12;k++){ema[k]=ema[k]*.6+c[k]*.4;all[k]+=c[k]}
+  const g=guess(ema),key=g?cname(g):'';
+  $('heard').textContent=g?key:'…';
+  if(key==cand)candN++;else{cand=key;candN=1}
+  if(g&&candN==3&&key!=lastKey){
+    lastKey=key;heard.push(g);showSeq();
+    const k=keyEst();$('keyinfo').textContent=`Likely key: ${SHARP[k.root]} ${k.mode}`;
+  }
+}
+function begin(){
+  clearInterval(ltimer);if(s.playing)stop();
+  heard=[];lastKey='';cand='';candN=0;ema.fill(0);all.fill(0);showSeq();
+  ltimer=setInterval(listenTick,100);
+}
+function end(){clearInterval(ltimer);$('heard').textContent=heard.length?'Finished listening':'Waiting for sound'}
+function stopMic(){
+  if(!mstream)return;
+  mstream.getTracks().forEach(t=>t.stop());msrc.disconnect();mstream=null;
+  $('mic').setAttribute('aria-pressed',false);$('mic').textContent='Use microphone';end();
+}
+$('file').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  stopMic();au.src=URL.createObjectURL(f);au.play();
+};
+au.onplay=()=>{
+  setupAn();
+  if(!fsrc){fsrc=ctx.createMediaElementSource(au);fsrc.connect(an);fsrc.connect(ctx.destination)}
+  stopMic();begin();
+};
+au.onpause=au.onended=()=>{if(!mstream)end()};
+$('mic').onclick=async()=>{
+  if(mstream){stopMic();return}
+  try{
+    setupAn();
+    mstream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    au.pause();msrc=ctx.createMediaStreamSource(mstream);msrc.connect(an);begin();
+    $('mic').setAttribute('aria-pressed',true);$('mic').textContent='Stop listening';
+  }catch(err){$('heard').textContent='Microphone blocked. It needs localhost or https, so upload a file instead.'}
+};
+$('load').onclick=()=>{
+  if(!heard.length){$('keyinfo').textContent='Nothing detected yet. Play a song first.';return}
+  const k=keyEst();s.root=k.root;s.mode=k.mode;
+  const out=[];
+  heard.forEach(g=>{
+    const d=[0,1,2,3,4,5,6].find(d=>(s.root+sn(d))%12==g.pc);
+    if(d!==undefined&&out[out.length-1]!==d)out.push(d);
+  });
+  s.prog=out.slice(0,8);render();
+  $('keyinfo').textContent=out.length?`Loaded the first ${s.prog.length} chords in ${nm(s.root)} ${s.mode}. Press Play.`:'No chords fit a key. Try a clearer recording.';
+};
+render();
+</script>
+</body>
+</html>
