@@ -1,0 +1,29 @@
+services:
+  # The Chordloop Node.js app
+  web:
+    build: .
+    image: daivyd/chordloop-app:1.1
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    expose:
+      - "3000"          # only reachable by other containers, not the internet
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Nginx sits in front and forwards visitors to the web service
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      web:
+        condition: service_healthy
